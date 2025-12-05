@@ -49,6 +49,12 @@ const SoundManager = {
   }
 };
 
+// Helper para obter a data atual no formato YYYY-MM-DD respeitando o fuso Brasil
+const getBrazilDateString = (date?: number | Date) => {
+    const d = date ? new Date(date) : new Date();
+    return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-');
+};
+
 export const AdminDashboard: React.FC = () => {
   // --- Auth State ---
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -74,8 +80,10 @@ export const AdminDashboard: React.FC = () => {
   // Reports State
   const [aiReport, setAiReport] = useState<string>('');
   const [isLoadingAi, setIsLoadingAi] = useState(false);
-  const [reportStartDate, setReportStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [reportEndDate, setReportEndDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  // Inicializa datas com o fuso correto do Brasil
+  const [reportStartDate, setReportStartDate] = useState(getBrazilDateString());
+  const [reportEndDate, setReportEndDate] = useState(getBrazilDateString());
 
   // Notification State
   const [selectedSound, setSelectedSound] = useState<SoundType>('classic');
@@ -472,17 +480,15 @@ export const AdminDashboard: React.FC = () => {
 
   // --- Financial Report Calculation ---
   const getFilteredFinancials = () => {
-    // Start of day in Brazil Timezone
-    const start = new Date(reportStartDate);
-    start.setHours(0,0,0,0);
+    // A lógica anterior de usar "new Date()" convertia para UTC e bagunçava a comparação
+    // Agora comparamos apenas as strings YYYY-MM-DD geradas com o fuso brasileiro
     
-    // End of day in Brazil Timezone
-    const end = new Date(reportEndDate);
-    end.setHours(23,59,59,999);
-
     const filteredSales = sales.filter(s => {
-      const saleDate = new Date(s.timestamp);
-      return saleDate >= start && saleDate <= end;
+      // Converte o timestamp da venda para string de data brasileira (Ex: 2023-10-27)
+      const saleDateStr = getBrazilDateString(s.timestamp);
+      
+      // Compara as strings lexicograficamente (funciona perfeito para YYYY-MM-DD)
+      return saleDateStr >= reportStartDate && saleDateStr <= reportEndDate;
     });
 
     const totalRevenue = filteredSales.reduce((acc, s) => acc + s.total, 0);

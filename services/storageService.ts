@@ -187,7 +187,9 @@ export const StorageService = {
 
   subscribeSales: (callback: (sales: Sale[]) => void) => {
       if (isCloud()) {
-          const q = query(collection(db, 'sales'), orderBy('timestamp', 'desc'));
+          // Removido orderBy temporariamente para evitar erro de índice no Firestore
+          // A ordenação é feita no cliente
+          const q = query(collection(db, 'sales'));
           return onSnapshot(q, (snapshot) => {
               const sales = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Sale));
               callback(sales);
@@ -362,6 +364,7 @@ export const StorageService = {
   },
 
   finalizeTable: async (tableId: number) => {
+    console.log(`Finalizando mesa ${tableId}...`);
     if (isCloud()) {
        // 1. Busca os dados da mesa para saber o método de pagamento
        const tableDocRef = doc(db, 'tables', tableId.toString());
@@ -396,6 +399,7 @@ export const StorageService = {
 
        // 4. Salva a Venda (Sale) consolidada
        if (totalAmount > 0) {
+           console.log(`Salvando venda de R$ ${totalAmount}`);
            await addDoc(collection(db, 'sales'), {
                tableId,
                total: totalAmount,
@@ -403,6 +407,8 @@ export const StorageService = {
                timestamp: Date.now(),
                itemsSummary: itemsSummaryArr.join(', ')
            });
+       } else {
+           console.warn("Mesa sem valor pendente. Nenhuma venda gerada.");
        }
        
        // 5. Remove a sessão da mesa (o alerta de fechamento)
