@@ -56,8 +56,9 @@ const getBrazilDateString = (date?: number | Date) => {
 };
 
 export const AdminDashboard: React.FC = () => {
-  // --- Auth State ---
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // --- Auth State & Roles ---
+  // null = não logado, 'operator' = caixa (1234), 'admin' = gerente (admin01)
+  const [userRole, setUserRole] = useState<'admin' | 'operator' | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState(false);
 
@@ -65,7 +66,7 @@ export const AdminDashboard: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [tables, setTables] = useState<{[key: string]: any}>({});
-  const [sales, setSales] = useState<Sale[]>([]); // New State for Sales History
+  const [sales, setSales] = useState<Sale[]>([]); 
   
   // Inventory Edit State
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -104,16 +105,17 @@ export const AdminDashboard: React.FC = () => {
        const url = window.location.origin + window.location.pathname;
        setBaseUrl(url.endsWith('/') ? url.slice(0, -1) : url);
        
-       // Check session storage for existing login
-       if (sessionStorage.getItem('admin_auth') === 'true') {
-           setIsAuthenticated(true);
+       // Check session storage for existing login and role
+       const storedRole = sessionStorage.getItem('user_role');
+       if (storedRole === 'admin' || storedRole === 'operator') {
+           setUserRole(storedRole as 'admin' | 'operator');
        }
     }
   }, []);
 
   // Real-time Subscriptions (Only if authenticated)
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!userRole) return;
 
     // Products
     const unsubProducts = StorageService.subscribeProducts(setProducts);
@@ -123,7 +125,7 @@ export const AdminDashboard: React.FC = () => {
         setTables(data);
     });
 
-    // Sales (New)
+    // Sales (New) - Only needed for reports, but loading it is fine
     const unsubSales = StorageService.subscribeSales(setSales);
 
     // Orders & Notifications Logic
@@ -156,14 +158,20 @@ export const AdminDashboard: React.FC = () => {
         unsubOrders();
         unsubSales();
     };
-  }, [selectedSound, lastOrderCount, isAuthenticated]);
+  }, [selectedSound, lastOrderCount, userRole]);
 
   const handleLogin = (e: React.FormEvent) => {
       e.preventDefault();
-      // Simple hardcoded PIN for demo purposes
+      
       if (passwordInput === '1234') {
-          setIsAuthenticated(true);
-          sessionStorage.setItem('admin_auth', 'true');
+          // OPERATOR ROLE
+          setUserRole('operator');
+          sessionStorage.setItem('user_role', 'operator');
+          setLoginError(false);
+      } else if (passwordInput === 'admin01') {
+          // ADMIN ROLE
+          setUserRole('admin');
+          sessionStorage.setItem('user_role', 'admin');
           setLoginError(false);
       } else {
           setLoginError(true);
@@ -172,8 +180,9 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleLogout = () => {
-      setIsAuthenticated(false);
-      sessionStorage.removeItem('admin_auth');
+      setUserRole(null);
+      sessionStorage.removeItem('user_role');
+      setPasswordInput('');
   };
 
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
@@ -217,7 +226,7 @@ export const AdminDashboard: React.FC = () => {
         img.onload = () => {
           // Resize Logic using Canvas - AGGRESSIVE RESIZE
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 250; // Largura REDUZIDA para garantir que passe no Firestore
+          const MAX_WIDTH = 250; 
           
           let width = img.width;
           let height = img.height;
@@ -480,14 +489,8 @@ export const AdminDashboard: React.FC = () => {
 
   // --- Financial Report Calculation ---
   const getFilteredFinancials = () => {
-    // A lógica anterior de usar "new Date()" convertia para UTC e bagunçava a comparação
-    // Agora comparamos apenas as strings YYYY-MM-DD geradas com o fuso brasileiro
-    
     const filteredSales = sales.filter(s => {
-      // Converte o timestamp da venda para string de data brasileira (Ex: 2023-10-27)
       const saleDateStr = getBrazilDateString(s.timestamp);
-      
-      // Compara as strings lexicograficamente (funciona perfeito para YYYY-MM-DD)
       return saleDateStr >= reportStartDate && saleDateStr <= reportEndDate;
     });
 
@@ -512,7 +515,7 @@ export const AdminDashboard: React.FC = () => {
   const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
 
   // --- Auth Gate ---
-  if (!isAuthenticated) {
+  if (!userRole) {
       return (
           <div className="min-h-screen bg-brand-light flex items-center justify-center p-4">
               <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center">
@@ -528,7 +531,7 @@ export const AdminDashboard: React.FC = () => {
                               type="password" 
                               value={passwordInput}
                               onChange={(e) => setPasswordInput(e.target.value)}
-                              placeholder="Digite a senha (1234)"
+                              placeholder="Digite sua senha"
                               className="w-full border border-gray-300 rounded-lg px-4 py-3 text-center text-lg tracking-widest focus:ring-brand focus:border-brand"
                               autoFocus
                           />
@@ -536,7 +539,7 @@ export const AdminDashboard: React.FC = () => {
                       
                       {loginError && (
                           <div className="text-red-500 text-sm font-medium animate-pulse">
-                              Senha incorreta. Tente novamente.
+                              Senha incorreta.
                           </div>
                       )}
 
@@ -594,12 +597,17 @@ export const AdminDashboard: React.FC = () => {
             >
                 <i className="fas fa-boxes w-6"></i> Estoque
             </button>
-            <button 
-                onClick={() => setActiveTab('reports')}
-                className={`w-full text-left p-3 rounded transition ${activeTab === 'reports' ? 'bg-brand' : 'hover:bg-white/10'}`}
-            >
-                <i className="fas fa-chart-line w-6"></i> Finanças
-            </button>
+            
+            {/* SOMENTE ADMIN VÊ FINANÇAS */}
+            {userRole === 'admin' && (
+                <button 
+                    onClick={() => setActiveTab('reports')}
+                    className={`w-full text-left p-3 rounded transition ${activeTab === 'reports' ? 'bg-brand' : 'hover:bg-white/10'}`}
+                >
+                    <i className="fas fa-chart-line w-6"></i> Finanças
+                </button>
+            )}
+
             <button 
                 onClick={() => setActiveTab('qrcodes')}
                 className={`w-full text-left p-3 rounded transition ${activeTab === 'qrcodes' ? 'bg-brand' : 'hover:bg-white/10'}`}
@@ -616,17 +624,18 @@ export const AdminDashboard: React.FC = () => {
         </div>
         
         <div className="pt-4 border-t border-white/10 space-y-4">
+            <div className="bg-white/10 rounded p-2 text-center text-xs">
+                Logado como:<br/>
+                <strong className="text-sm uppercase text-brand-light">{userRole === 'admin' ? 'Administrador' : 'Operador/Caixa'}</strong>
+            </div>
             <button 
                 onClick={handleLogout}
                 className="w-full flex items-center justify-center gap-2 bg-red-500/20 text-red-100 hover:bg-red-500 hover:text-white p-2 rounded transition text-sm"
             >
                 <i className="fas fa-sign-out-alt"></i> Sair do Painel
             </button>
-            <div className="text-xs text-white/50">
-                Status: {StorageService.isUsingCloud() ? <span className="text-green-400 font-bold">● Online (Firebase)</span> : <span className="text-yellow-400 font-bold">● Local (Demo)</span>}
-                <div className="mt-2 text-[10px] opacity-70">
-                    Dev: Máximo Batista
-                </div>
+            <div className="text-xs text-white/50 text-center">
+                Status: {StorageService.isUsingCloud() ? <span className="text-green-400 font-bold">● Online</span> : <span className="text-yellow-400 font-bold">● Local</span>}
             </div>
         </div>
       </aside>
@@ -767,10 +776,10 @@ export const AdminDashboard: React.FC = () => {
               <button 
                 onClick={() => {
                   setEditingProduct({
-                    id: '', // ID vazio para indicar novo produto
+                    id: '', 
                     name: '', description: '', price: 0,
                     stock: 0, category: Category.BEBIDAS,
-                    imageUrl: '' // Empty starts without image
+                    imageUrl: '' 
                   });
                   setIsEditModalOpen(true);
                 }}
@@ -825,7 +834,8 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'reports' && (
+        {/* PROTEÇÃO VISUAL: SÓ MOSTRA SE FOR ADMIN */}
+        {activeTab === 'reports' && userRole === 'admin' && (
           <div className="space-y-6">
             
             {/* Financial Report Section */}

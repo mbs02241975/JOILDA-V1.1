@@ -113,7 +113,7 @@ export const ClientView: React.FC<Props> = ({ tableId }) => {
 
   // Agrupa todos os itens consumidos para exibição na conta
   const consumedItems = useMemo(() => {
-    const itemsMap = new Map<string, {name: string, qty: number, total: number}>();
+    const itemsMap = new Map<string, {name: string, qty: number, price: number, total: number}>();
     myOrders.forEach(order => {
         if(order.status !== OrderStatus.CANCELED) {
             order.items.forEach(item => {
@@ -125,6 +125,7 @@ export const ClientView: React.FC<Props> = ({ tableId }) => {
                     itemsMap.set(item.productId, {
                         name: item.name,
                         qty: item.quantity,
+                        price: item.price,
                         total: item.price * item.quantity
                     });
                 }
@@ -311,46 +312,74 @@ export const ClientView: React.FC<Props> = ({ tableId }) => {
         </div>
       )}
 
-      {/* Bill Modal */}
+      {/* Bill Modal - CUPOM FISCAL DIGITAL STYLE */}
       {isBillOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4 text-gray-800">Fechar Conta</h2>
-            <p className="mb-4 text-gray-600">Confirme o fechamento da mesa <strong>{tableId}</strong>.</p>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm rounded-none sm:rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto relative">
             
-            <div className="bg-gray-50 p-4 rounded-lg mb-6 text-sm">
-               <h4 className="font-bold border-b pb-2 mb-2 text-gray-700">Resumo do Consumo</h4>
-               <ul className="space-y-2 mb-4">
-                   {consumedItems.map((item, i) => (
-                       <li key={i} className="flex justify-between">
-                           <span>{item.qty}x {item.name}</span>
-                           <span>R$ {item.total.toFixed(2)}</span>
-                       </li>
-                   ))}
-               </ul>
-               <div className="flex justify-between border-t pt-2 mt-2">
-                 <span>Total Geral:</span>
-                 <span className="font-bold text-lg">R$ {totalConsumed.toFixed(2)}</span>
-               </div>
+            {/* Paper Texture Effect Header */}
+            <div className="bg-yellow-50 p-6 border-b-2 border-dashed border-gray-300 text-center">
+                <div className="w-12 h-12 bg-brand text-white rounded-full flex items-center justify-center mx-auto mb-2 text-xl shadow">
+                    <i className="fas fa-umbrella-beach"></i>
+                </div>
+                <h2 className="text-xl font-bold text-gray-800 font-mono tracking-tighter uppercase">Conferência de Conta</h2>
+                <p className="text-xs text-gray-500 font-mono">Barraca de Praia entre Família</p>
+                <div className="mt-2 inline-block bg-white px-3 py-1 rounded border border-gray-200 text-sm font-bold">
+                    MESA {tableId}
+                </div>
             </div>
 
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Forma de Pagamento</label>
-              <select 
-                value={paymentMethod} 
-                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                className="w-full border-gray-300 border rounded-md p-2 focus:ring-brand focus:border-brand"
-              >
-                {Object.values(PaymentMethod).map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
+            <div className="p-6">
+                <p className="mb-4 text-gray-600 text-sm text-center">Verifique seu consumo antes de solicitar o fechamento.</p>
+                
+                {/* Receipt List */}
+                <div className="bg-gray-50 p-4 rounded border border-gray-200 mb-6 font-mono text-sm">
+                   <div className="flex justify-between border-b pb-2 mb-2 text-gray-400 text-xs uppercase">
+                       <span>Item</span>
+                       <span>Total</span>
+                   </div>
+                   <ul className="space-y-3 mb-4">
+                       {consumedItems.map((item, i) => (
+                           <li key={i} className="flex justify-between items-start">
+                               <div className="flex flex-col">
+                                   <span className="font-bold text-gray-700">{item.name}</span>
+                                   <span className="text-xs text-gray-500">{item.qty} x R$ {item.price.toFixed(2)}</span>
+                               </div>
+                               <span className="font-bold text-gray-800">R$ {item.total.toFixed(2)}</span>
+                           </li>
+                       ))}
+                   </ul>
+                   <div className="flex justify-between border-t-2 border-dashed border-gray-300 pt-3 mt-2">
+                     <span className="font-bold text-gray-600">TOTAL A PAGAR:</span>
+                     <span className="font-bold text-xl text-brand-dark">R$ {totalConsumed.toFixed(2)}</span>
+                   </div>
+                </div>
 
-            <div className="flex gap-3">
-              <button onClick={() => setIsBillOpen(false)} className="flex-1 py-2 border border-gray-300 rounded-md hover:bg-gray-50">Cancelar</button>
-              <button onClick={requestBill} className="flex-1 py-2 bg-brand-orange text-white rounded-md hover:bg-orange-600 font-bold">Solicitar Fechamento</button>
+                <div className="mb-6">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Como você prefere pagar?</label>
+                  <select 
+                    value={paymentMethod} 
+                    onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                    className="w-full border-gray-300 border-2 rounded-lg p-3 focus:ring-brand focus:border-brand bg-white"
+                  >
+                    {Object.values(PaymentMethod).map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-3">
+                  <button onClick={() => setIsBillOpen(false)} className="flex-1 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-600">
+                    Voltar
+                  </button>
+                  <button onClick={requestBill} className="flex-1 py-3 bg-brand-orange text-white rounded-lg hover:bg-orange-600 font-bold shadow-md transform active:scale-95 transition-transform flex items-center justify-center gap-2">
+                    <i className="fas fa-check-circle"></i> Confirmar
+                  </button>
+                </div>
             </div>
+            
+            {/* Paper tear effect bottom */}
+            <div className="h-4 bg-gray-100" style={{backgroundImage: 'radial-gradient(circle, transparent 50%, white 50%)', backgroundSize: '10px 10px', backgroundPosition: '0 5px'}}></div>
           </div>
         </div>
       )}
