@@ -1088,8 +1088,8 @@ export const AdminDashboard: React.FC = () => {
             <form onSubmit={handleSaveProduct} className="space-y-4">
               
               {/* Image Upload Section */}
-              <div className="flex justify-center mb-4">
-                 <div className="relative group">
+              <div className="flex flex-col items-center mb-4">
+                 <div className="relative group mb-2">
                     {editingProduct.imageUrl ? (
                         <img src={editingProduct.imageUrl} alt="Preview" className="w-32 h-32 object-cover rounded-lg border-2 border-brand" />
                     ) : (
@@ -1115,6 +1115,20 @@ export const AdminDashboard: React.FC = () => {
                     />
                  </div>
                  {isProcessingImage && <p className="text-xs text-center text-brand mt-1 animate-pulse">Comprimindo imagem...</p>}
+
+                 <div className="w-full text-center text-xs text-gray-400 my-1">— OU —</div>
+
+                 <div className="w-full">
+                   <label className="block text-xs font-bold text-gray-600 mb-1">Link da Imagem (URL)</label>
+                   <input
+                     type="text"
+                     placeholder="Cole aqui o link (ex: https://site.com/foto.jpg)"
+                     value={editingProduct.imageUrl}
+                     onChange={(e) => setEditingProduct({...editingProduct, imageUrl: e.target.value})}
+                     className="w-full border rounded p-2 text-sm bg-gray-50"
+                   />
+                   <p className="text-[10px] text-gray-400 mt-1">Dica: Copie o endereço da imagem do Google e cole aqui.</p>
+                 </div>
               </div>
 
               <div>
