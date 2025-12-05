@@ -188,8 +188,8 @@ export const StorageService = {
   saveProduct: async (product: Product) => {
     if (isCloud()) {
       try {
-          // Se tem ID longo (>10 caracteres), assumimos que é edição de um existente no Firestore
-          if (product.id && product.id.length > 10) { 
+          // Verifica se é Edição (ID existe) ou Novo (ID vazio)
+          if (product.id) { 
             const docRef = doc(db, 'products', product.id);
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { id, ...data } = product;
@@ -230,18 +230,24 @@ export const StorageService = {
     } else {
       // Modo Local
       const products = JSON.parse(safeStorage.getItem(STORAGE_KEYS.PRODUCTS) || '[]');
-      const existingIndex = products.findIndex((p: Product) => p.id === product.id);
       
-      // Tenta achar por nome também para evitar duplicatas no local
-      const nameIndex = products.findIndex((p: Product) => p.name === product.name && p.id !== product.id);
-
-      if (existingIndex >= 0) {
-        products[existingIndex] = product;
-      } else if (nameIndex >= 0) {
-         products[nameIndex].stock += product.stock;
-         products[nameIndex].price = product.price; // Atualiza info
+      if (product.id) {
+        // Edição
+        const existingIndex = products.findIndex((p: Product) => p.id === product.id);
+        if (existingIndex >= 0) products[existingIndex] = product;
       } else {
-        products.push(product);
+        // Novo (Modo Local)
+        // Tenta achar por nome também
+        const nameIndex = products.findIndex((p: Product) => p.name === product.name);
+        
+        if (nameIndex >= 0) {
+            products[nameIndex].stock += product.stock;
+            products[nameIndex].price = product.price;
+        } else {
+            // Gera ID temporário se não tiver
+            product.id = Date.now().toString();
+            products.push(product);
+        }
       }
       safeStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
     }

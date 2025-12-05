@@ -176,9 +176,9 @@ export const AdminDashboard: React.FC = () => {
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingProduct) {
-      // Verificação de segurança de tamanho
-      if (editingProduct.imageUrl.length > 900000) { // 900kb limit
-          alert("ERRO: A imagem ainda está muito pesada. Por favor, tente usar o link da imagem (URL) em vez de enviar o arquivo.");
+      // Verificação de segurança de tamanho antes de enviar
+      if (editingProduct.imageUrl.length > 950000) { // ~950kb limit
+          alert("ERRO: A imagem ainda está muito pesada (>1MB). O banco gratuito do Google não aceita.\n\nPor favor, use o campo 'Link da Imagem' ou escolha uma foto menor.");
           return;
       }
 
@@ -187,7 +187,7 @@ export const AdminDashboard: React.FC = () => {
         setIsEditModalOpen(false);
         setEditingProduct(null);
       } catch (error) {
-        alert("Erro ao salvar produto. Se estiver enviando uma foto, ela pode ser muito pesada para o banco gratuito.");
+        alert("Erro ao salvar produto. Verifique se a foto não está muito pesada ou se há problemas de conexão.");
       }
     }
   };
@@ -222,6 +222,13 @@ export const AdminDashboard: React.FC = () => {
           
           // Compress to JPEG 40% quality
           const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
+
+          // Check final size
+          if (dataUrl.length > 900000) {
+             alert("Atenção: Mesmo comprimida, esta foto ficou muito grande para o sistema.\nRecomendamos usar o Link da Imagem.");
+             setIsProcessingImage(false);
+             return;
+          }
           
           setEditingProduct({ ...editingProduct, imageUrl: dataUrl });
           setIsProcessingImage(false);
@@ -742,7 +749,7 @@ export const AdminDashboard: React.FC = () => {
               <button 
                 onClick={() => {
                   setEditingProduct({
-                    id: Date.now().toString(),
+                    id: '', // ID vazio para indicar novo produto
                     name: '', description: '', price: 0,
                     stock: 0, category: Category.BEBIDAS,
                     imageUrl: '' // Empty starts without image
