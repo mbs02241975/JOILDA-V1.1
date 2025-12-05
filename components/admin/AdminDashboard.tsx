@@ -176,6 +176,12 @@ export const AdminDashboard: React.FC = () => {
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingProduct) {
+      // Verificação de segurança de tamanho
+      if (editingProduct.imageUrl.length > 900000) { // 900kb limit
+          alert("ERRO: A imagem ainda está muito pesada. Por favor, tente usar o link da imagem (URL) em vez de enviar o arquivo.");
+          return;
+      }
+
       try {
         await StorageService.saveProduct(editingProduct);
         setIsEditModalOpen(false);
@@ -198,7 +204,7 @@ export const AdminDashboard: React.FC = () => {
         img.onload = () => {
           // Resize Logic using Canvas - AGGRESSIVE RESIZE
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 350; // Largura máxima bem reduzida para mobile
+          const MAX_WIDTH = 250; // Largura REDUZIDA para garantir que passe no Firestore
           
           let width = img.width;
           let height = img.height;
@@ -214,8 +220,8 @@ export const AdminDashboard: React.FC = () => {
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
           
-          // Compress to JPEG 50% quality
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+          // Compress to JPEG 40% quality
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
           
           setEditingProduct({ ...editingProduct, imageUrl: dataUrl });
           setIsProcessingImage(false);
