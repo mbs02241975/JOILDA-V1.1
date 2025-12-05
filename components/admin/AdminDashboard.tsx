@@ -168,7 +168,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleCloseTable = async (tableId: number) => {
-    if (window.confirm(`Confirma o recebimento e fechamento da Mesa ${tableId}?`)) {
+    if (window.confirm(`Confirma o recebimento e fechamento da Mesa ${tableId}? Isso limpará os pedidos da tela do cliente.`)) {
       await StorageService.finalizeTable(tableId);
     }
   };
@@ -230,7 +230,8 @@ export const AdminDashboard: React.FC = () => {
   const printReceipt = (tableId: number, ordersToPrint: Order[]) => {
     const tableOrders = ordersToPrint.filter(o => o.status !== OrderStatus.CANCELED);
     const total = tableOrders.reduce((acc, o) => acc + o.total, 0);
-    const date = new Date().toLocaleString('pt-BR');
+    // Use Brazilian Timezone explicitly
+    const date = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
     
     // Aggregate items
     const itemsMap = new Map<string, {name: string, qty: number, price: number, total: number}>();
@@ -307,7 +308,7 @@ export const AdminDashboard: React.FC = () => {
     const salesData = allOrders.map(o => ({
       items: o.items.map(i => ({ name: i.name, qty: i.quantity })),
       total: o.total,
-      date: new Date(o.timestamp).toLocaleDateString()
+      date: new Date(o.timestamp).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
     }));
     const report = await GeminiService.generateDailyReport(salesData);
     setAiReport(report);
@@ -453,8 +454,11 @@ export const AdminDashboard: React.FC = () => {
 
   // --- Financial Report Calculation ---
   const getFilteredFinancials = () => {
+    // Start of day in Brazil Timezone
     const start = new Date(reportStartDate);
     start.setHours(0,0,0,0);
+    
+    // End of day in Brazil Timezone
     const end = new Date(reportEndDate);
     end.setHours(23,59,59,999);
 
@@ -681,7 +685,7 @@ export const AdminDashboard: React.FC = () => {
                   
                   <div className="flex justify-between items-center mb-2">
                     <span className="font-bold text-lg">Mesa {order.tableId}</span>
-                    <span className="text-xs text-gray-400">{new Date(order.timestamp).toLocaleTimeString('pt-BR')}</span>
+                    <span className="text-xs text-gray-400">{new Date(order.timestamp).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
                   </div>
                   {order.observation && (
                       <div className="bg-yellow-50 text-yellow-800 text-sm p-2 rounded mb-2 border border-yellow-100">
