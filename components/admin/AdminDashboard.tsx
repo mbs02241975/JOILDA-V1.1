@@ -89,6 +89,7 @@ export const AdminDashboard: React.FC = () => {
   // Notification State
   const [selectedSound, setSelectedSound] = useState<SoundType>('classic');
   const [lastOrderCount, setLastOrderCount] = useState(0);
+  const [lastClosingCount, setLastClosingCount] = useState(0); // Rastreia contagem de fechamentos
   const [notification, setNotification] = useState<{message: string, visible: boolean}>({ message: '', visible: false });
   
   // Database Config State
@@ -120,9 +121,22 @@ export const AdminDashboard: React.FC = () => {
     // Products
     const unsubProducts = StorageService.subscribeProducts(setProducts);
     
-    // Tables
+    // Tables (with Bill Request Sound Logic)
     const unsubTables = StorageService.subscribeTables((data) => {
         setTables(data);
+        
+        // Verifica solicitações de fechamento
+        const closingCount = Object.values(data).filter((t: any) => t.status === TableStatus.CLOSING_REQUESTED).length;
+
+        if (!firstLoadRef.current && closingCount > lastClosingCount) {
+             SoundManager.play('alert'); // Som diferente para dinheiro
+             setNotification({
+                message: `💰 Solicitação de Fechamento de Conta!`,
+                visible: true
+             });
+             setTimeout(() => setNotification(prev => ({ ...prev, visible: false })), 5000);
+        }
+        setLastClosingCount(closingCount);
     });
 
     // Sales (New) - Only needed for reports, but loading it is fine
@@ -158,7 +172,7 @@ export const AdminDashboard: React.FC = () => {
         unsubOrders();
         unsubSales();
     };
-  }, [selectedSound, lastOrderCount, userRole]);
+  }, [selectedSound, lastOrderCount, lastClosingCount, userRole]);
 
   const handleLogin = (e: React.FormEvent) => {
       e.preventDefault();

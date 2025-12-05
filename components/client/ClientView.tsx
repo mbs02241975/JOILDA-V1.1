@@ -168,7 +168,11 @@ export const ClientView: React.FC<Props> = ({ tableId }) => {
             </div>
             
             <button 
-                onClick={() => window.location.reload()} 
+                onClick={() => {
+                  // Limpa o hash para ir para a home e recarrega
+                  window.location.hash = '';
+                  window.location.reload();
+                }} 
                 className="bg-white text-brand font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-100 transition transform hover:scale-105 active:scale-95"
             >
                 <i className="fas fa-sign-out-alt mr-2"></i> Sair
