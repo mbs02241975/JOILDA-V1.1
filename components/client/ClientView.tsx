@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Product, Category, CartItem, OrderStatus, PaymentMethod, TableStatus, Order } from '../../types';
 import { StorageService } from '../../services/storageService';
 
@@ -16,6 +16,11 @@ export const ClientView: React.FC<Props> = ({ tableId }) => {
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(PaymentMethod.PIX);
   const [observation, setObservation] = useState('');
+  
+  // Novo estado para controlar o fim da sessão
+  const [isSessionEnded, setIsSessionEnded] = useState(false);
+  // Ref para rastrear o status anterior e detectar a mudança de "Solicitado" para "Fechado"
+  const lastStatusRef = useRef<TableStatus>(TableStatus.OPEN);
 
   // Real-time Subscriptions
   useEffect(() => {
@@ -41,10 +46,22 @@ export const ClientView: React.FC<Props> = ({ tableId }) => {
         setMyOrders(allOrders.filter(o => o.tableId === tableId && o.status !== OrderStatus.PAID));
     });
 
-    // Subscribe Table Status
+    // Subscribe Table Status & Session End Detection
     const unsubTables = StorageService.subscribeTables((tables) => {
         const myTable = tables[tableId];
-        setSessionStatus(myTable?.status || TableStatus.OPEN);
+        
+        // Lógica de Detecção de Encerramento:
+        // Se a mesa não existe mais no banco (foi deletada pelo admin)
+        // E o status anterior era "Fechamento Solicitado", então o pagamento foi confirmado.
+        if (!myTable && lastStatusRef.current === TableStatus.CLOSING_REQUESTED) {
+            setIsSessionEnded(true);
+        }
+
+        const currentStatus = myTable?.status || TableStatus.OPEN;
+        
+        // Atualiza a referência do último status
+        lastStatusRef.current = currentStatus;
+        setSessionStatus(currentStatus);
     });
 
     return () => {
@@ -135,6 +152,30 @@ export const ClientView: React.FC<Props> = ({ tableId }) => {
     return Array.from(itemsMap.values());
   }, [myOrders]);
 
+  // TELA DE SESSÃO ENCERRADA (PAGAMENTO CONFIRMADO)
+  if (isSessionEnded) {
+    return (
+        <div className="flex flex-col items-center justify-center h-screen bg-brand p-6 text-center text-white animate-fade-in">
+            <div className="w-24 h-24 bg-white text-brand rounded-full flex items-center justify-center text-4xl mb-6 shadow-lg animate-bounce">
+                <i className="fas fa-check"></i>
+            </div>
+            <h1 className="text-3xl font-bold mb-2">Obrigado!</h1>
+            <p className="text-xl mb-8">Seu pagamento foi confirmado.</p>
+            
+            <div className="bg-white/20 p-4 rounded-lg mb-8 max-w-xs w-full">
+                <p className="text-sm font-medium">Volte sempre à</p>
+                <p className="font-bold text-lg">Barraca de Praia entre Família</p>
+            </div>
+            
+            <button 
+                onClick={() => window.location.reload()} 
+                className="bg-white text-brand font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-100 transition transform hover:scale-105 active:scale-95"
+            >
+                <i className="fas fa-sign-out-alt mr-2"></i> Sair
+            </button>
+        </div>
+    );
+  }
 
   if (products.length === 0 && sessionStatus === TableStatus.OPEN) {
       return (
