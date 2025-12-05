@@ -75,6 +75,8 @@ const isCloud = () => !!db;
 export const StorageService = {
   // --- Initialization ---
   init: (config?: DatabaseConfig) => {
+    if (db) return true; // Evita reinicializar se já estiver conectado
+
     // 1. Prioridade: Verifica se o arquivo firebaseConfig.ts foi preenchido corretamente pelo usuário
     if (!config && firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('COLAR_')) {
         console.log("Usando configuração fixa do firebaseConfig.ts");

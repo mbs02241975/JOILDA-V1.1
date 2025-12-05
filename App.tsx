@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { ClientView } from './components/client/ClientView';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { StorageService } from './services/storageService';
 
 const App: React.FC = () => {
   const [view, setView] = useState<'landing' | 'client' | 'admin'>('landing');
   const [tableId, setTableId] = useState<number>(1);
 
   useEffect(() => {
+    // Inicializa a conexão com o Banco de Dados (Firebase) assim que o app abre
+    StorageService.init();
+
     // Simple hash routing simulation since we don't have React Router
     const handleHashChange = () => {
       const hash = window.location.hash;
