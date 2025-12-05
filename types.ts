@@ -63,3 +63,11 @@ export interface TableSession {
   orders: Order[];
   requestedPaymentMethod?: PaymentMethod;
 }
+
+export interface Sale {
+  id: string;
+  timestamp: number;
+  total: number;
+  paymentMethod: string;
+  itemsSummary: string;
+}

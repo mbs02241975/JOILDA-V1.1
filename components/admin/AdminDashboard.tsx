@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Order, OrderStatus, Product, Category, TableStatus, PaymentMethod } from '../../types';
+import { Order, OrderStatus, Product, Category, TableStatus, PaymentMethod, Sale } from '../../types';
 import { StorageService, DatabaseConfig } from '../../services/storageService';
 import { GeminiService } from '../../services/geminiService';
 
@@ -59,6 +59,7 @@ export const AdminDashboard: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [tables, setTables] = useState<{[key: string]: any}>({});
+  const [sales, setSales] = useState<Sale[]>([]); // New State for Sales History
   
   // Inventory Edit State
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -114,6 +115,9 @@ export const AdminDashboard: React.FC = () => {
         setTables(data);
     });
 
+    // Sales (New)
+    const unsubSales = StorageService.subscribeSales(setSales);
+
     // Orders & Notifications Logic
     const unsubOrders = StorageService.subscribeOrders((newOrders) => {
         const sorted = newOrders.sort((a, b) => b.timestamp - a.timestamp);
@@ -142,6 +146,7 @@ export const AdminDashboard: React.FC = () => {
         unsubProducts();
         unsubTables();
         unsubOrders();
+        unsubSales();
     };
   }, [selectedSound, lastOrderCount, isAuthenticated]);
 
@@ -475,18 +480,25 @@ export const AdminDashboard: React.FC = () => {
     const end = new Date(reportEndDate);
     end.setHours(23,59,59,999);
 
-    const filteredOrders = orders.filter(o => {
-      const orderDate = new Date(o.timestamp);
-      // Inclui pedidos DELIVERED e PAID no faturamento
-      return (o.status === OrderStatus.DELIVERED || o.status === OrderStatus.PAID) && orderDate >= start && orderDate <= end;
+    const filteredSales = sales.filter(s => {
+      const saleDate = new Date(s.timestamp);
+      return saleDate >= start && saleDate <= end;
     });
 
-    const totalRevenue = filteredOrders.reduce((acc, o) => acc + o.total, 0);
+    const totalRevenue = filteredSales.reduce((acc, s) => acc + s.total, 0);
     
+    // Breakdown by Payment Method
+    const byMethod: {[key: string]: number} = {};
+    filteredSales.forEach(s => {
+        const method = s.paymentMethod || 'Outros';
+        byMethod[method] = (byMethod[method] || 0) + s.total;
+    });
+
     return {
       totalRevenue,
-      orderCount: filteredOrders.length,
-      averageTicket: filteredOrders.length ? totalRevenue / filteredOrders.length : 0
+      salesCount: filteredSales.length,
+      averageTicket: filteredSales.length ? totalRevenue / filteredSales.length : 0,
+      byMethod
     };
   };
 
@@ -813,7 +825,7 @@ export const AdminDashboard: React.FC = () => {
             {/* Financial Report Section */}
             <div className="bg-white p-6 rounded shadow border-l-4 border-green-500">
                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-                 <h2 className="text-xl font-bold text-gray-800"><i className="fas fa-cash-register mr-2"></i>Relatório Financeiro</h2>
+                 <h2 className="text-xl font-bold text-gray-800"><i className="fas fa-cash-register mr-2"></i>Relatório Financeiro (Vendas Consolidadas)</h2>
                  
                  <div className="flex gap-2 items-center mt-2 md:mt-0 bg-gray-50 p-2 rounded">
                     <span className="text-sm text-gray-600">Período:</span>
@@ -836,19 +848,33 @@ export const AdminDashboard: React.FC = () => {
                {(() => {
                  const stats = getFilteredFinancials();
                  return (
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                      <div className="bg-green-50 p-4 rounded-lg border border-green-100 text-center">
-                         <div className="text-sm text-green-600 mb-1">Faturamento Total</div>
-                         <div className="text-3xl font-bold text-green-800">R$ {stats.totalRevenue.toFixed(2)}</div>
-                      </div>
-                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-center">
-                         <div className="text-sm text-blue-600 mb-1">Pedidos Finalizados</div>
-                         <div className="text-3xl font-bold text-blue-800">{stats.orderCount}</div>
-                      </div>
-                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-100 text-center">
-                         <div className="text-sm text-purple-600 mb-1">Ticket Médio</div>
-                         <div className="text-3xl font-bold text-purple-800">R$ {stats.averageTicket.toFixed(2)}</div>
-                      </div>
+                   <div>
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div className="bg-green-50 p-4 rounded-lg border border-green-100 text-center">
+                           <div className="text-sm text-green-600 mb-1">Faturamento Total</div>
+                           <div className="text-3xl font-bold text-green-800">R$ {stats.totalRevenue.toFixed(2)}</div>
+                        </div>
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-center">
+                           <div className="text-sm text-blue-600 mb-1">Vendas Finalizadas</div>
+                           <div className="text-3xl font-bold text-blue-800">{stats.salesCount}</div>
+                        </div>
+                        <div className="bg-purple-50 p-4 rounded-lg border border-purple-100 text-center">
+                           <div className="text-sm text-purple-600 mb-1">Ticket Médio</div>
+                           <div className="text-3xl font-bold text-purple-800">R$ {stats.averageTicket.toFixed(2)}</div>
+                        </div>
+                     </div>
+
+                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 className="font-bold text-gray-700 mb-3 text-sm uppercase">Por Forma de Pagamento</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {Object.entries(stats.byMethod).map(([method, value]) => (
+                                <div key={method} className="bg-white p-3 rounded shadow-sm">
+                                    <div className="text-xs text-gray-500">{method}</div>
+                                    <div className="font-bold text-gray-800">R$ {value.toFixed(2)}</div>
+                                </div>
+                            ))}
+                        </div>
+                     </div>
                    </div>
                  );
                })()}
@@ -887,6 +913,7 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* ... Rest of existing components (QR Codes, Database) ... */}
         {activeTab === 'qrcodes' && (
           <div className="bg-white rounded shadow p-6 h-full">
             <div className="flex justify-between items-center mb-4">

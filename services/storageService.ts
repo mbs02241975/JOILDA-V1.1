@@ -1,6 +1,6 @@
-import { Product, Category, Order, TableSession, TableStatus, OrderStatus } from '../types';
+import { Product, Category, Order, TableSession, TableStatus, OrderStatus, Sale } from '../types';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, updateDoc, doc, deleteDoc, onSnapshot, query, orderBy, setDoc, getDocs, increment, where, limit } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, updateDoc, doc, deleteDoc, onSnapshot, query, orderBy, setDoc, getDocs, increment, where, limit, getDoc } from 'firebase/firestore';
 import { firebaseConfig } from './firebaseConfig';
 
 // --- Configuration Interface ---
@@ -25,6 +25,7 @@ const STORAGE_KEYS = {
   PRODUCTS: 'beach_app_products',
   ORDERS: 'beach_app_orders',
   TABLES: 'beach_app_tables',
+  SALES: 'beach_app_sales',
   DB_CONFIG: 'beach_app_db_config'
 };
 
@@ -177,6 +178,24 @@ export const StorageService = {
           const fetch = () => {
             const tables = JSON.parse(safeStorage.getItem(STORAGE_KEYS.TABLES) || '{}');
             callback(tables);
+          };
+          fetch();
+          const interval = setInterval(fetch, 2000);
+          return () => clearInterval(interval);
+      }
+  },
+
+  subscribeSales: (callback: (sales: Sale[]) => void) => {
+      if (isCloud()) {
+          const q = query(collection(db, 'sales'), orderBy('timestamp', 'desc'));
+          return onSnapshot(q, (snapshot) => {
+              const sales = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Sale));
+              callback(sales);
+          });
+      } else {
+          const fetch = () => {
+              const stored = safeStorage.getItem(STORAGE_KEYS.SALES);
+              callback(stored ? JSON.parse(stored) : []);
           };
           fetch();
           const interval = setInterval(fetch, 2000);
@@ -344,9 +363,12 @@ export const StorageService = {
 
   finalizeTable: async (tableId: number) => {
     if (isCloud()) {
-       // 1. Remove a sessão da mesa (o alerta de fechamento)
-       await deleteDoc(doc(db, 'tables', tableId.toString()));
-       
+       // 1. Busca os dados da mesa para saber o método de pagamento
+       const tableDocRef = doc(db, 'tables', tableId.toString());
+       const tableDoc = await getDoc(tableDocRef);
+       const tableData = tableDoc.data();
+       const paymentMethod = tableData?.paymentMethod || 'Desconhecido';
+
        // 2. Busca todos os pedidos dessa mesa que não estão cancelados nem pagos
        const q = query(
          collection(db, 'orders'), 
@@ -354,29 +376,72 @@ export const StorageService = {
        );
        const snapshot = await getDocs(q);
        
-       // 3. Atualiza o status para 'PAID' (Pago), zerando a mesa para o cliente
+       // 3. Calcula total e resumo de itens
+       let totalAmount = 0;
+       const itemsSummaryArr: string[] = [];
+
        const updates = snapshot.docs.map(async (d) => {
-           const order = d.data();
+           const order = d.data() as Order;
+           // Considera apenas pedidos válidos para o total
            if (order.status !== OrderStatus.PAID && order.status !== OrderStatus.CANCELED) {
+               totalAmount += order.total;
+               order.items.forEach(i => {
+                   itemsSummaryArr.push(`${i.quantity}x ${i.name}`);
+               });
+               // Marca como pago
                return updateDoc(doc(db, 'orders', d.id), { status: OrderStatus.PAID });
            }
        });
        await Promise.all(updates);
-       console.log(`Mesa ${tableId} finalizada e zerada.`);
+
+       // 4. Salva a Venda (Sale) consolidada
+       if (totalAmount > 0) {
+           await addDoc(collection(db, 'sales'), {
+               tableId,
+               total: totalAmount,
+               paymentMethod,
+               timestamp: Date.now(),
+               itemsSummary: itemsSummaryArr.join(', ')
+           });
+       }
+       
+       // 5. Remove a sessão da mesa (o alerta de fechamento)
+       await deleteDoc(tableDocRef);
+       console.log(`Mesa ${tableId} finalizada. Venda salva.`);
 
     } else {
+      // Lógica Local
       const tables = JSON.parse(safeStorage.getItem(STORAGE_KEYS.TABLES) || '{}');
+      const paymentMethod = tables[tableId]?.paymentMethod || 'Desconhecido';
       delete tables[tableId];
       safeStorage.setItem(STORAGE_KEYS.TABLES, JSON.stringify(tables));
       
-      // Local clean up logic
       const orders = JSON.parse(safeStorage.getItem(STORAGE_KEYS.ORDERS) || '[]');
+      let totalAmount = 0;
+      const itemsSummaryArr: string[] = [];
+
       orders.forEach((o: Order) => {
-          if (o.tableId === tableId && o.status !== OrderStatus.CANCELED) {
+          if (o.tableId === tableId && o.status !== OrderStatus.CANCELED && o.status !== OrderStatus.PAID) {
+              totalAmount += o.total;
+              o.items.forEach(i => itemsSummaryArr.push(`${i.quantity}x ${i.name}`));
               o.status = OrderStatus.PAID;
           }
       });
       safeStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
+
+      // Save Sale Local
+      if (totalAmount > 0) {
+          const sales = JSON.parse(safeStorage.getItem(STORAGE_KEYS.SALES) || '[]');
+          sales.push({
+              id: Date.now().toString(),
+              tableId,
+              total: totalAmount,
+              paymentMethod,
+              timestamp: Date.now(),
+              itemsSummary: itemsSummaryArr.join(', ')
+          });
+          safeStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
+      }
     }
   },
   
